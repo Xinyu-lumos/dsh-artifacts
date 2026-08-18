@@ -1,12 +1,14 @@
-/** Browser-side Cordis service dependencies. */
-export const inject = [
-  "slots",
-  "locale",
-  "conversationEvents",
-  "connection",
-] as const;
+import type { Context } from "@deepseek-ai/cordis";
+import { diagramArtifactsDefinition } from "./events.js";
 
-/** Register the browser half of the artifacts plugin. */
-export function apply(_ctx: unknown): void {
-  // Feature behavior begins in later tasks.
+export * from "./artifact-controller.js";
+export * from "./events.js";
+export * from "./versions.js";
+
+/** Browser-side Cordis service dependencies. */
+export const inject = ["conversationEvents"] as const;
+
+/** Register durable diagram-artifact conversation state. */
+export function apply(ctx: Context): void {
+  ctx.conversationEvents.register(diagramArtifactsDefinition);
 }
