@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { DIAGRAM_LIMITS } from "../src/shared/diagram.js";
+import {
+  DIAGRAM_LIMITS,
+  DIAGRAM_TYPE_VALUES,
+  DIRECTION_VALUES,
+  THEME_VALUES,
+  TONE_VALUES,
+  type DiagramType,
+} from "../src/shared/diagram.js";
 import {
   DiagramValidationError,
   normalizeDiagramArtifact,
   parseDiagramPresentationMetadata,
 } from "../src/shared/validate.js";
 
-function validArtifact(type: "workflow" | "architecture" | "nested-loop" = "workflow") {
+function validArtifact(type: DiagramType = DIAGRAM_TYPE_VALUES[0]) {
   return {
     artifactId: "order-flow",
     title: "Order flow",
@@ -35,8 +42,28 @@ function violations(input: unknown) {
 }
 
 describe("normalizeDiagramArtifact", () => {
-  it.each(["workflow", "architecture", "nested-loop"] as const)("accepts a valid %s", (type) => {
+  it.each(DIAGRAM_TYPE_VALUES)("accepts diagram type %s from the shared tuple", (type) => {
     expect(normalizeDiagramArtifact(validArtifact(type)).diagram.type).toBe(type);
+  });
+
+  it.each(DIRECTION_VALUES)("accepts direction %s from the shared tuple", (direction) => {
+    const input = validArtifact();
+    input.diagram.direction = direction;
+    expect(normalizeDiagramArtifact(input).diagram.direction).toBe(direction);
+  });
+
+  it.each(THEME_VALUES)("accepts theme %s from the shared tuple", (theme) => {
+    const input = validArtifact();
+    input.diagram.theme = theme;
+    expect(normalizeDiagramArtifact(input).diagram.theme).toBe(theme);
+  });
+
+  it.each(TONE_VALUES)("accepts tone %s from the shared tuple", (tone) => {
+    const input = validArtifact();
+    input.diagram.groups[0]!.tone = tone;
+    input.diagram.nodes[0]!.tone = tone;
+    const diagram = normalizeDiagramArtifact(input).diagram;
+    expect([diagram.groups[0]!.tone, diagram.nodes[0]!.tone]).toEqual([tone, tone]);
   });
 
   it("trims strings, returns a canonical copy, and does not mutate input", () => {

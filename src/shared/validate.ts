@@ -5,12 +5,14 @@ import type {
   DiagramNode,
   DiagramPresentationMetadata,
   DiagramSpec,
-  DiagramType,
-  Direction,
-  Theme,
-  Tone,
 } from "./diagram.js";
-import { DIAGRAM_LIMITS } from "./diagram.js";
+import {
+  DIAGRAM_LIMITS,
+  DIAGRAM_TYPE_VALUES,
+  DIRECTION_VALUES,
+  THEME_VALUES,
+  TONE_VALUES,
+} from "./diagram.js";
 
 export interface DiagramViolation {
   readonly path: string;
@@ -31,10 +33,15 @@ type RecordValue = Record<string, unknown>;
 type AddViolation = (path: string, message: string) => void;
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const TYPES = new Set<DiagramType>(["workflow", "architecture", "nested-loop"]);
-const DIRECTIONS = new Set<Direction>(["TB", "LR"]);
-const TONES = new Set<Tone>(["neutral", "compute", "flow", "constraint"]);
-const THEMES = new Set<Theme>(["auto", "light", "dark"]);
+
+function valueSet<const Values extends readonly string[]>(values: Values): ReadonlySet<Values[number]> {
+  return new Set(values);
+}
+
+const TYPES = valueSet(DIAGRAM_TYPE_VALUES);
+const DIRECTIONS = valueSet(DIRECTION_VALUES);
+const TONES = valueSet(TONE_VALUES);
+const THEMES = valueSet(THEME_VALUES);
 
 function isRecord(value: unknown): value is RecordValue {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -140,7 +147,7 @@ function parseGroups(value: unknown, path: string, add: AddViolation): DiagramGr
     const id = requiredString(item, "id", itemPath, DIAGRAM_LIMITS.maxIdLength, add, true);
     const label = requiredString(item, "label", itemPath, DIAGRAM_LIMITS.maxLabelLength, add);
     const description = optionalString(item, "description", itemPath, DIAGRAM_LIMITS.maxDescriptionLength, add);
-    const tone = enumValue(item, "tone", itemPath, TONES, "neutral | compute | flow | constraint", add, true);
+    const tone = enumValue(item, "tone", itemPath, TONES, TONE_VALUES.join(" | "), add, true);
     const parentId = optionalString(item, "parentId", itemPath, DIAGRAM_LIMITS.maxIdLength, add, true);
     checkUnknown(item, ["id", "label", "description", "tone", "parentId"], itemPath, add);
     result.push({
@@ -172,7 +179,7 @@ function parseNodes(value: unknown, path: string, add: AddViolation): DiagramNod
     const id = requiredString(item, "id", itemPath, DIAGRAM_LIMITS.maxIdLength, add, true);
     const label = requiredString(item, "label", itemPath, DIAGRAM_LIMITS.maxLabelLength, add);
     const description = optionalString(item, "description", itemPath, DIAGRAM_LIMITS.maxDescriptionLength, add);
-    const tone = enumValue(item, "tone", itemPath, TONES, "neutral | compute | flow | constraint", add, true);
+    const tone = enumValue(item, "tone", itemPath, TONES, TONE_VALUES.join(" | "), add, true);
     const groupId = optionalString(item, "groupId", itemPath, DIAGRAM_LIMITS.maxIdLength, add, true);
     checkUnknown(item, ["id", "label", "description", "tone", "groupId"], itemPath, add);
     result.push({
@@ -219,12 +226,12 @@ function parseDiagram(value: unknown, path: string, add: AddViolation): DiagramS
     add(path, value === undefined ? "is required" : "must be an object");
     return undefined;
   }
-  const type = enumValue(value, "type", path, TYPES, "workflow | architecture | nested-loop", add);
-  const direction = enumValue(value, "direction", path, DIRECTIONS, "TB | LR", add);
+  const type = enumValue(value, "type", path, TYPES, DIAGRAM_TYPE_VALUES.join(" | "), add);
+  const direction = enumValue(value, "direction", path, DIRECTIONS, DIRECTION_VALUES.join(" | "), add);
   const groups = parseGroups(value.groups, `${path}.groups`, add);
   const nodes = parseNodes(value.nodes, `${path}.nodes`, add);
   const edges = parseEdges(value.edges, `${path}.edges`, add);
-  const theme = enumValue(value, "theme", path, THEMES, "auto | light | dark", add, true);
+  const theme = enumValue(value, "theme", path, THEMES, THEME_VALUES.join(" | "), add, true);
   checkUnknown(value, ["type", "direction", "groups", "nodes", "edges", "theme"], path, add);
   return {
     ...(type !== undefined ? { type } : { type: "workflow" }),
