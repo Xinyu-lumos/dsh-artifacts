@@ -1,8 +1,30 @@
 {
   "name": "dsh-artifacts",
   "version": "0.1.0",
-  "description": "Diagram artifacts plugin for DeepSeek Harness",
+  "description": "DSH Web plugin: Claude-Artifact-style diagram rendering (workflow, architecture, nested-loop) with inline SVG preview, versioned drawer, and SVG/PNG export",
   "license": "MIT",
+  "author": "Xinyu-lumos",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Xinyu-lumos/dsh-artifacts"
+  },
+  "homepage": "https://github.com/Xinyu-lumos/dsh-artifacts#readme",
+  "bugs": {
+    "url": "https://github.com/Xinyu-lumos/dsh-artifacts/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "diagram",
+    "artifact",
+    "svg",
+    "workflow",
+    "architecture",
+    "nested-loop"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/types/index.d.ts",
