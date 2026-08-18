@@ -101,6 +101,16 @@ Publish a new GitHub repository after all checks pass. Record the tested DSH ver
 
 Commit boundary: `chore: verify and publish dsh-artifacts`.
 
+### Verification record (executed)
+
+- Tested DSH version: 0.1.0-rc.6.
+- Installed the package into an isolated DSH_HOME (C:/DeepSeek/.dsh-verify) as a link: bundle; dsh-artifacts was added to dependencies and dsh.profile.bundles. The isolated web profile used only @deepseek-ai/dsh-base plus @deepseek-ai/dsh-web-app (resolved from the DSH install) plus dsh-artifacts.
+- Host tool discovery: dsh --profile web --dump-config composed the plugin into the profile tree (id: artifacts / name: dsh-artifacts) alongside ui-tool, ui-conversation, and ui-layout (the slot providers).
+- Server boot: dsh web --port 3099 (isolated home; the live 3080 server was not touched) booted cleanly and printed the URL, so the host apply ran without error.
+- Browser module discovery: GET /plugins/dsh-artifacts/client.js returned 200 (65,188 bytes) with the window.__ModuleLoader__.load wrapper (id dsh-artifacts); the page HTML contained __DSH_BOOT__ and two dsh-artifacts references (the boot manifest includes the plugin).
+- Rendered UI: a headless Chrome screenshot of the test URL decoded to a valid 1440x900 RGB frame with about 99% dark pixels (dark theme) plus light text and accent pixels, i.e. a normal rendered UI rather than a blank or error page.
+- Remaining manual verification: an actual render_diagram result rendered in a live session (requires a model provider, which the isolated profile intentionally omitted) and reading the exact UI text labels (no vision provider is configured on this machine). Workflow and nested-loop fixtures are covered by tests/layout.test.ts.
+
 ## Risks and rollback
 
 - Pre-release slot contracts may change: pin peer dependencies and fail gracefully when the client bundle does not load.
