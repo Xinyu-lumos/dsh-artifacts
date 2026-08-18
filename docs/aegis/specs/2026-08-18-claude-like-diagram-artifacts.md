@@ -50,7 +50,7 @@ The tool is stateless. Every call carries the complete current spec. The result 
 - `edges`: source id, target id, optional label
 - `theme`: optional `auto | light | dark`
 
-Limits: 40 nodes, 80 edges, nesting depth 4, title 120 characters, node label 120 characters, description 240 characters. Unknown fields are rejected or removed by normalization. IDs must be unique and every edge/group reference must resolve.
+Limits: 20 groups, 40 nodes, 80 edges, nesting depth 4, title 120 characters, node label 120 characters, description 240 characters. Unknown fields are rejected or removed by normalization. IDs must be unique and every edge/group reference must resolve.
 
 ## Client architecture
 
