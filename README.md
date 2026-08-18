@@ -10,7 +10,7 @@ larger, versioned view and export.
 - Inline SVG diagram cards rendered inside the tool result (no reload, no extra window).
 - Three deterministic layouts: <code>workflow</code> (vertical or horizontal), <code>architecture</code> (grouped stages), and <code>nested-loop</code> (recursive loops).
 - Automatic versioning: every successful render of the same artifact id becomes a new version you can switch between.
-- A right-side panel with Preview / Source tabs, a version selector, theme (light / dark / auto), and an auto-open toggle.
+- A right-side panel with Preview / Source tabs, a version selector, theme (light / dark / auto), resizable width, full-screen mode, and an auto-open toggle; Escape closes it.
 - Export the current diagram as SVG or PNG, or copy the SVG markup / spec JSON.
 - Lightweight, white-background, clean design; SVG is built from React elements, so no raw HTML or script is ever injected.
 

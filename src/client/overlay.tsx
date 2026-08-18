@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { ConversationSnapshot, SessionFace, SessionId } from "@deepseek-ai/dsh-client-runtime/client";
 import type { Theme } from "../shared/diagram.js";
 import type { ArtifactController } from "./artifact-controller.js";
@@ -171,6 +171,25 @@ const TOGGLE_LABEL: CSSProperties = {
   marginLeft: "auto",
 };
 
+const DEFAULT_PANEL_WIDTH = 520;
+const MIN_PANEL_WIDTH = 320;
+
+const RESIZE_HANDLE: CSSProperties = {
+  position: "absolute",
+  left: 0,
+  top: 0,
+  bottom: 0,
+  width: 6,
+  cursor: "col-resize",
+  touchAction: "none",
+  zIndex: 2,
+};
+
+/** Clamp a numeric value to an inclusive range (used for drawer resize bounds). */
+export function clampWidth(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
 function useSessionSnapshot(session: SessionFace | undefined): ConversationSnapshot | undefined {
   const subscribe = useMemo(
     () => (session ? (fn: () => void) => session.subscribe(fn) : () => () => {}),
@@ -193,7 +212,12 @@ export function ArtifactOverlay(props: ArtifactOverlayInjected) {
   const currentSessionId = useSyncExternalStore(subscribeSessions, getCurrentSessionId, getCurrentSessionId);
   const settings = useSyncExternalStore(artifactSettings.subscribe, artifactSettings.getSnapshot, artifactSettings.getSnapshot);
   const [tab, setTab] = useState<"preview" | "source">("preview");
+  const [width, setWidth] = useState(DEFAULT_PANEL_WIDTH);
+  const [maximized, setMaximized] = useState(false);
+  const [resizing, setResizing] = useState(false);
   const previewRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   const openSessionId = state.open ? state.sessionId : undefined;
   const session = openSessionId === undefined ? undefined : getSession(openSessionId);
@@ -207,6 +231,38 @@ export function ArtifactOverlay(props: ArtifactOverlayInjected) {
       controller.clearForSession(currentSessionId);
     }
   }, [currentSessionId, controller, state.open]);
+
+  useEffect(() => {
+    if (!resizing) return;
+    const onMove = (event: globalThis.PointerEvent) => {
+      if (!dragRef.current) return;
+      const delta = dragRef.current.startX - event.clientX;
+      setWidth(clampWidth(dragRef.current.startWidth + delta, MIN_PANEL_WIDTH, window.innerWidth));
+    };
+    const onUp = () => {
+      setResizing(false);
+      dragRef.current = null;
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [resizing]);
+
+  useEffect(() => {
+    if (!state.open) {
+      setMaximized(false);
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") controller.close();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    panelRef.current?.focus();
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [state.open, controller]);
 
   if (
     !state.open ||
@@ -252,8 +308,29 @@ export function ArtifactOverlay(props: ArtifactOverlayInjected) {
 
   const specText = version ? JSON.stringify(version.metadata.diagram, null, 2) : "";
 
+  const panelStyle: CSSProperties = {
+    ...PANEL,
+    width: maximized ? "100vw" : width,
+    maxWidth: maximized ? "100vw" : "92vw",
+  };
+
+  const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragRef.current = { startX: event.clientX, startWidth: width };
+    setResizing(true);
+  };
+
   return (
-    <div style={PANEL} role="dialog" aria-label="Diagram artifact panel">
+    <div ref={panelRef} style={panelStyle} role="dialog" aria-label="Diagram artifact panel" tabIndex={-1}>
+      {maximized ? null : (
+        <div
+          style={RESIZE_HANDLE}
+          onPointerDown={startResize}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize diagram panel"
+        />
+      )}
       <div style={PANEL_HEADER}>
         <span style={PANEL_TITLE}>{version ? version.metadata.title : "Diagram"}</span>
         <select
@@ -266,6 +343,14 @@ export function ArtifactOverlay(props: ArtifactOverlayInjected) {
           <option value="dark">Dark</option>
           <option value="auto">Auto</option>
         </select>
+        <button
+          type="button"
+          style={BUTTON}
+          onClick={() => setMaximized((value) => !value)}
+          aria-label={maximized ? "Restore diagram panel" : "Maximize diagram panel"}
+        >
+          {maximized ? "Restore" : "Maximize"}
+        </button>
         <button type="button" style={BUTTON} onClick={() => controller.close()}>
           Close
         </button>

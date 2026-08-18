@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ConversationSnapshot, SessionFace } from "@deepseek-ai/dsh-client-runtime/client";
 import { createArtifactController } from "../src/client/artifact-controller.js";
-import { ArtifactOverlay } from "../src/client/overlay.js";
+import { ArtifactOverlay, clampWidth } from "../src/client/overlay.js";
 import { RenderDiagramToolview } from "../src/client/render-toolview.js";
 
 const diagram = {
@@ -67,6 +67,36 @@ describe("ArtifactOverlay", () => {
     expect(html).toContain("Flow");
     expect(html).toContain("<svg");
     expect(html).toContain("Close");
+  });
+
+  it("renders resize and full-screen controls while open", () => {
+    const controller = createArtifactController();
+    controller.openArtifact("sess-1", "flow-1", 1);
+    const html = renderToStaticMarkup(
+      <ArtifactOverlay
+        controller={controller}
+        getSession={() => session}
+        getCurrentSessionId={() => "sess-1" as never}
+        subscribeSessions={() => () => {}}
+      />,
+    );
+    expect(html).toContain("Maximize");
+    expect(html).toContain('role="separator"');
+    expect(html).toContain('tabindex="-1"');
+  });
+});
+
+describe("clampWidth", () => {
+  it("clamps below the minimum", () => {
+    expect(clampWidth(300, 320, 1000)).toBe(320);
+  });
+
+  it("clamps above the maximum", () => {
+    expect(clampWidth(2000, 320, 1000)).toBe(1000);
+  });
+
+  it("keeps in-range values unchanged", () => {
+    expect(clampWidth(500, 320, 1000)).toBe(500);
   });
 });
 
