@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
 import type { ToolCallBlock, ToolResultNode } from "@deepseek-ai/dsh-client-runtime/client";
 import type { ToolCallViewProps } from "@deepseek-ai/dsh-client-ui-tool/client";
-import type { DiagramPresentationMetadata } from "../shared/diagram.js";
+import type { DiagramPresentationMetadata, Theme } from "../shared/diagram.js";
 import { parseDiagramPresentationMetadata } from "../shared/validate.js";
 import { DiagramView } from "./DiagramView.js";
+import { artifactSettings } from "./settings.js";
 import { artifactController } from "./store.js";
 import { listArtifactVersionGroups, selectLatestArtifactVersion } from "./versions.js";
 
@@ -85,9 +86,10 @@ function ErrorCard({ message }: { message: string }) {
 
 function DiagramCard(props: {
   metadata: DiagramPresentationMetadata;
+  theme: Theme;
   onOpen?: () => void;
 }) {
-  const { metadata, onOpen } = props;
+  const { metadata, theme, onOpen } = props;
   return (
     <div style={CARD}>
       <div style={HEADER}>
@@ -99,7 +101,7 @@ function DiagramCard(props: {
         ) : null}
       </div>
       <div style={BODY}>
-        <DiagramView diagram={metadata.diagram} title={metadata.title} theme="light" />
+        <DiagramView diagram={metadata.diagram} title={metadata.title} theme={theme} />
       </div>
     </div>
   );
@@ -108,32 +110,60 @@ function DiagramCard(props: {
 /** Keyed atomic tool view for the render_diagram tool. */
 export function RenderDiagramToolview(props: ToolCallViewProps) {
   const { block, sessionId, useSession } = props;
+  const settings = useSyncExternalStore(artifactSettings.subscribe, artifactSettings.getSnapshot, artifactSettings.getSnapshot);
+  const autoOpenedRef = useRef<string | null>(null);
   const nodes = useSession((s) => s.nodes);
   const groups = useMemo(() => listArtifactVersionGroups(nodes), [nodes]);
 
-  if (!isSettled(block)) return <RunningCard />;
-
-  if (block.isError) {
-    return <ErrorCard message={block.error?.name ?? "The diagram tool failed"} />;
+  // Precompute settled facts so every hook stays above the early returns.
+  let settledResult: ToolResultNode | null = null;
+  let isError = false;
+  let metadata: DiagramPresentationMetadata | null = null;
+  let version: number | undefined;
+  if (isSettled(block)) {
+    settledResult = block;
+    isError = block.isError;
+    if (!block.isError) {
+      metadata = parseDiagramPresentationMetadata(block.meta);
+      if (metadata) {
+        const meta = metadata;
+        const group = groups.find((g) => g.artifactId === meta.artifactId);
+        version =
+          group?.versions.find((v) => v.seq === block.seq)?.version ??
+          selectLatestArtifactVersion(group)?.version;
+      }
+    }
   }
 
-  const metadata = parseDiagramPresentationMetadata(block.meta);
+  // Auto-open the drawer once per settled result, gated by the setting.
+  useEffect(() => {
+    if (settledResult === null || isError) return;
+    if (metadata === null || version === undefined) return;
+    if (!settings.autoOpen) return;
+    const key = sessionId + ":" + metadata.artifactId + ":" + settledResult.seq;
+    if (autoOpenedRef.current === key) return;
+    autoOpenedRef.current = key;
+    artifactController.openArtifact(sessionId, metadata.artifactId, version);
+  }, [settledResult, isError, metadata, version, settings.autoOpen, sessionId]);
+
+  if (settledResult === null) return <RunningCard />;
+  if (isError) {
+    return <ErrorCard message={settledResult.error?.name ?? "The diagram tool failed"} />;
+  }
   if (metadata === null) {
     return <ErrorCard message="The diagram result is not valid" />;
   }
-
-  const group = groups.find((g) => g.artifactId === metadata.artifactId);
-  const version =
-    group?.versions.find((v) => v.seq === block.seq)?.version ??
-    selectLatestArtifactVersion(group)?.version;
+  const artifactId = metadata.artifactId;
+  const resolvedVersion = version;
 
   return (
     <DiagramCard
       metadata={metadata}
+      theme={settings.theme}
       onOpen={
-        version === undefined
+        resolvedVersion === undefined
           ? undefined
-          : () => artifactController.openArtifact(sessionId, metadata.artifactId, version)
+          : () => artifactController.openArtifact(sessionId, artifactId, resolvedVersion)
       }
     />
   );

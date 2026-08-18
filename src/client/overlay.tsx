@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
 import type { ConversationSnapshot, SessionFace, SessionId } from "@deepseek-ai/dsh-client-runtime/client";
+import type { Theme } from "../shared/diagram.js";
 import type { ArtifactController } from "./artifact-controller.js";
 import { DiagramView } from "./DiagramView.js";
+import { buildFilename, copyText, downloadPng, downloadSvg, serializeSvgElement } from "./export.js";
+import { artifactSettings } from "./settings.js";
 import { findArtifactVersion, listArtifactVersionGroups } from "./versions.js";
 
 export interface ArtifactOverlayInjected {
@@ -17,8 +20,8 @@ const PANEL: CSSProperties = {
   top: 0,
   right: 0,
   bottom: 0,
-  width: 480,
-  maxWidth: "90vw",
+  width: 520,
+  maxWidth: "92vw",
   background: "#ffffff",
   borderLeft: "1px solid #e5e7eb",
   boxShadow: "0 8px 30px rgba(0, 0, 0, 0.12)",
@@ -30,13 +33,13 @@ const PANEL: CSSProperties = {
 const PANEL_HEADER: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  justifyContent: "space-between",
   gap: 8,
   padding: "12px 16px",
   borderBottom: "1px solid #f0f0f0",
 };
 
 const PANEL_TITLE: CSSProperties = {
+  flex: 1,
   fontSize: 14,
   fontWeight: 600,
   color: "#111827",
@@ -45,7 +48,16 @@ const PANEL_TITLE: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const CLOSE_BUTTON: CSSProperties = {
+const SELECT: CSSProperties = {
+  border: "1px solid #d1d5db",
+  borderRadius: 6,
+  background: "#f9fafb",
+  color: "#111827",
+  fontSize: 12,
+  padding: "4px 8px",
+};
+
+const BUTTON: CSSProperties = {
   border: "1px solid #d1d5db",
   borderRadius: 6,
   background: "#f9fafb",
@@ -53,6 +65,34 @@ const CLOSE_BUTTON: CSSProperties = {
   fontSize: 12,
   padding: "4px 10px",
   cursor: "pointer",
+};
+
+const TAB_BAR: CSSProperties = {
+  display: "flex",
+  gap: 2,
+  padding: "6px 16px 0",
+  borderBottom: "1px solid #f0f0f0",
+};
+
+const TAB: CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: "#6b7280",
+  fontSize: 12,
+  padding: "6px 12px",
+  cursor: "pointer",
+  borderBottom: "2px solid transparent",
+};
+
+const TAB_ACTIVE: CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: "#111827",
+  fontSize: 12,
+  fontWeight: 600,
+  padding: "6px 12px",
+  cursor: "pointer",
+  borderBottom: "2px solid #111827",
 };
 
 const VERSION_BAR: CSSProperties = {
@@ -91,11 +131,44 @@ const PANEL_BODY: CSSProperties = {
   background: "#ffffff",
 };
 
+const SOURCE: CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  lineHeight: 1.5,
+  color: "#111827",
+  background: "#f9fafb",
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
+  padding: 12,
+  overflow: "auto",
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+};
+
 const EMPTY: CSSProperties = {
   fontSize: 13,
   color: "#6b7280",
   padding: 24,
   textAlign: "center",
+};
+
+const TOOLBAR: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "10px 16px",
+  borderTop: "1px solid #f0f0f0",
+  flexWrap: "wrap",
+};
+
+const TOGGLE_LABEL: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  fontSize: 12,
+  color: "#374151",
+  marginLeft: "auto",
 };
 
 function useSessionSnapshot(session: SessionFace | undefined): ConversationSnapshot | undefined {
@@ -118,9 +191,10 @@ export function ArtifactOverlay(props: ArtifactOverlayInjected) {
   const { controller, getSession, getCurrentSessionId, subscribeSessions } = props;
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const currentSessionId = useSyncExternalStore(subscribeSessions, getCurrentSessionId, getCurrentSessionId);
+  const settings = useSyncExternalStore(artifactSettings.subscribe, artifactSettings.getSnapshot, artifactSettings.getSnapshot);
+  const [tab, setTab] = useState<"preview" | "source">("preview");
+  const previewRef = useRef<HTMLDivElement | null>(null);
 
-  // Every hook runs before any early return (Rules of Hooks), so the open ->
-  // closed transition never changes the hook count.
   const openSessionId = state.open ? state.sessionId : undefined;
   const session = openSessionId === undefined ? undefined : getSession(openSessionId);
   const snapshot = useSessionSnapshot(session);
@@ -149,12 +223,72 @@ export function ArtifactOverlay(props: ArtifactOverlayInjected) {
   const versions = group?.versions ?? [];
   const version = findArtifactVersion(group, state.version);
 
+  const serialize = (): string | null => {
+    const svg = previewRef.current?.querySelector("svg");
+    if (!svg) return null;
+    return serializeSvgElement(svg as SVGSVGElement);
+  };
+
+  const handleCopySvg = () => {
+    const markup = serialize();
+    if (markup) void copyText(markup);
+  };
+
+  const handleCopySpec = () => {
+    if (version) void copyText(JSON.stringify(version.metadata.diagram, null, 2));
+  };
+
+  const handleDownloadSvg = () => {
+    if (!version) return;
+    const markup = serialize();
+    if (markup) downloadSvg(buildFilename(version.metadata.artifactId, version.metadata.title, "svg"), markup);
+  };
+
+  const handleDownloadPng = () => {
+    if (!version) return;
+    const markup = serialize();
+    if (markup) void downloadPng(buildFilename(version.metadata.artifactId, version.metadata.title, "svg"), markup);
+  };
+
+  const specText = version ? JSON.stringify(version.metadata.diagram, null, 2) : "";
+
   return (
     <div style={PANEL} role="dialog" aria-label="Diagram artifact panel">
       <div style={PANEL_HEADER}>
         <span style={PANEL_TITLE}>{version ? version.metadata.title : "Diagram"}</span>
-        <button type="button" style={CLOSE_BUTTON} onClick={() => controller.close()}>
+        <select
+          style={SELECT}
+          value={settings.theme}
+          onChange={(event) => artifactSettings.setTheme(event.target.value as Theme)}
+          aria-label="Diagram theme"
+        >
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+          <option value="auto">Auto</option>
+        </select>
+        <button type="button" style={BUTTON} onClick={() => controller.close()}>
           Close
+        </button>
+      </div>
+
+      <div style={TAB_BAR} role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "preview"}
+          style={tab === "preview" ? TAB_ACTIVE : TAB}
+          onClick={() => setTab("preview")}
+        >
+          Preview
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "source"}
+          style={tab === "source" ? TAB_ACTIVE : TAB}
+          onClick={() => setTab("source")}
+        >
+          Source
         </button>
       </div>
 
@@ -174,15 +308,41 @@ export function ArtifactOverlay(props: ArtifactOverlayInjected) {
       ) : null}
 
       <div style={PANEL_BODY}>
-        {version ? (
-          <DiagramView
-            diagram={version.metadata.diagram}
-            title={version.metadata.title}
-            theme="light"
+        <div ref={previewRef} style={{ display: tab === "preview" ? "block" : "none" }}>
+          {version ? (
+            <DiagramView
+              diagram={version.metadata.diagram}
+              title={version.metadata.title}
+              theme={settings.theme}
+            />
+          ) : (
+            <div style={EMPTY}>This diagram is not available in the current view.</div>
+          )}
+        </div>
+        {tab === "source" ? <pre style={SOURCE}>{specText}</pre> : null}
+      </div>
+
+      <div style={TOOLBAR}>
+        <button type="button" style={BUTTON} onClick={handleDownloadSvg}>
+          Download SVG
+        </button>
+        <button type="button" style={BUTTON} onClick={handleDownloadPng}>
+          Download PNG
+        </button>
+        <button type="button" style={BUTTON} onClick={handleCopySvg}>
+          Copy SVG
+        </button>
+        <button type="button" style={BUTTON} onClick={handleCopySpec}>
+          Copy spec
+        </button>
+        <label style={TOGGLE_LABEL}>
+          <input
+            type="checkbox"
+            checked={settings.autoOpen}
+            onChange={(event) => artifactSettings.setAutoOpen(event.target.checked)}
           />
-        ) : (
-          <div style={EMPTY}>This diagram is not available in the current view.</div>
-        )}
+          Auto-open
+        </label>
       </div>
     </div>
   );

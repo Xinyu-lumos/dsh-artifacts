@@ -25,6 +25,8 @@ export * from "./events.js";
 export * from "./versions.js";
 export * from "./layout.js";
 export * from "./DiagramView.js";
+export * from "./export.js";
+export * from "./settings.js";
 export * from "./store.js";
 export { ArtifactOverlay, type ArtifactOverlayInjected } from "./overlay.js";
 export { RenderDiagramToolview } from "./render-toolview.js";
