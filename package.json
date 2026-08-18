@@ -71,7 +71,6 @@
     "build": "pnpm run clean && pnpm run build:js && pnpm run build:types",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
-    "prepack": "pnpm run build",
     "pack:dry": "pnpm pack --dry-run"
   },
   "peerDependencies": {
